@@ -25,38 +25,59 @@ def get_distance(x1, x2, mode='euclidean'):
 
 class KMeans:
 
-    def __init__(self, n=2, max_iterations=100):
+    def __init__(self, points, n=2, distance_metric='euclidean', max_iterations=100):
+        """
+        A k-means clustering algorithm
+        :param points: List of points
+        :param distance_metric: Distance metric to use (optional).
+            Options:
+                euclidean (default),
+                manhattan,
+                chebyshev.
+        :param n: Number of clusters to create
+        :param max_iterations: Max number of iterations the algorithm will do (default 100)
+        """
         self.n = n
         self.max_iterations = max_iterations
 
-        # Make empty list of points, n elements long
+        # Make empty list of list of points, n elements long
         self.clusters = [[] for i in range(self.n)]
+
+        # Make empty list of centroids
         self.centroids = []
 
-    def predict(self, x, distance_metric='euclidean'):
-        """
-        Implements the k-means clustering algorithm
-        :param x: Data points to cluster
-        :param distance_metric: Distance metric to use for distance calculations (optional)
-            Default: Euclidean
-            Options:
-                euclidean
-                manhattan
-                chebyshev
-        :return: Data points, clustered
-        """
-        self.x = x
-        self.num_samples, self.num_features = x.shape
+        # Our output, empty for now
+        self.complete_clustering = list()
+
+        self.points = points
+        self.num_samples, self.num_features = points.shape
         self.distance_metric = distance_metric
 
-        # Choose random centroids
+        # Run the clustering algorithm
+        self.km_cluster()
+
+    def get_clustered_data(self):
+        """
+        Returns the clustered data
+        :return: Clustered data (as pandas DataFrame)
+        """
+        return self.complete_clustering
+
+    def km_cluster(self):
+        """
+        Implements the k-means clustering algorithm
+        """
+        # Choose random centroids, based on existing points in the dataset
+        # i.e. choose n random points in the dataset, to be our initial centroids
         rands = np.random.choice(self.num_samples, self.n, replace=False)
-        self.centroids = [self.x[i] for i in rands]
+        self.centroids = [self.points[i] for i in rands]
 
         for i in range(self.max_iterations):
 
+            # Get clusters (indices), based on centroids
             self.clusters = self._create_clusters(self.centroids)
 
+            # Get new and old positions of centroids, to check if they have moved
             centroids_old = self.centroids
             self.centroids = self._get_centroids(self.clusters)
 
@@ -64,11 +85,15 @@ class KMeans:
             if self._converged(centroids_old, self.centroids):
                 break
 
-        # return cluster labels
-        return pd.DataFrame(self.x, index=self._get_cluster_labels(self.clusters).ravel())
-        #return self._get_cluster_labels(self.clusters)
+        # Get cluster labels, then save a DataFrame with the clusters, and labels for each point in each cluster
+        self.complete_clustering = pd.DataFrame(self.points, index=self._get_cluster_labels(self.clusters).ravel())
 
     def _get_cluster_labels(self, clusters):
+        """
+        Make labels for each of the points in each cluster
+        :param clusters: Groups of points clustered together
+        :return: list of labelled points
+        """
         labels = np.empty(self.num_samples, dtype=np.int8)
         for i, cluster in enumerate(clusters):
             for j in cluster:
@@ -81,9 +106,13 @@ class KMeans:
         :param centroids: Centroids of the data set
         :return: clusters
         """
-        clusters = [[] for i in range(self.n)]
-        for i, point in enumerate(self.x):
+        clusters = [[] for k in range(self.n)]
+        # Iterate through all points
+        for i, point in enumerate(self.points):
+            # Find closest centroid to this point
             centroid_index = self._closest_centroid(point, centroids)
+            # Assign an index to this point, based on whichever centroid it is closest to
+            # Then, append this point to the cluster associated with that centroid
             clusters[centroid_index].append(i)
         return clusters
 
@@ -105,9 +134,11 @@ class KMeans:
         :param clusters: List of clusters
         :return: List of centroids for each cluster
         """
+        # Empty list (size n) of lists (points - based on number of features)
         centroids = np.zeros((self.n, self.num_features))
         for i, cluster in enumerate(clusters):
-            cluster_mean = np.mean(self.x[cluster], axis=0)
+            # Get the
+            cluster_mean = np.mean(self.points[cluster], axis=0)
             centroids[i] = cluster_mean
         return centroids
 
@@ -146,16 +177,16 @@ if __name__ == "__main__":
     #plot1_original = plt.scatter(data[0].loc[1].to_numpy(), data[1].loc[1].to_numpy())
     #plot2_original = plt.scatter(data[0].loc[2].to_numpy(), data[1].loc[2].to_numpy())
 
-    km = KMeans(n=classes, max_iterations=200)
-    pred = km.predict(raw_data, distance_metric='chebyshev')
-    centroids = km.get_centroids_public()
+    km = KMeans(raw_data, classes, distance_metric='euclidean', max_iterations=200)
+    pred = km.get_clustered_data()
+    predicted_centroids = km.get_centroids_public()
 
     plot_pred = plt.figure(1)
 
     pred_plots = list()
-    for i in range(classes):
-        pred_plots.append(plt.scatter(pred[0].loc[i].to_numpy(), pred[1].loc[i].to_numpy()))
-    plot_centroids = plt.scatter(centroids[:, 0], centroids[:, 1], marker='X', s=150, c='k')
+    for plot in range(classes):
+        pred_plots.append(plt.scatter(pred[0].loc[plot].to_numpy(), pred[1].loc[plot].to_numpy()))
+    plot_centroids = plt.scatter(predicted_centroids[:, 0], predicted_centroids[:, 1], marker='X', s=150, c='k')
 
     plt.show()
 
